@@ -1,0 +1,62 @@
+{% extends "webapp/base.html" %}
+
+{% block content %}
+<h2>Meeting Summary Result</h2>
+
+{% if error %}
+<div class="error">{{ error }}</div>
+{% endif %}
+
+<h3>Summary</h3>
+<pre>{{ summary|default:"(No summary generated)" }}</pre>
+
+<h3>Transcript</h3>
+{% if transcript %}
+<pre>{{ transcript }}</pre>
+{% else %}
+<p>(No transcript available or text input only)</p>
+{% endif %}
+
+<div class="actions">
+    <h3>Action Items</h3>
+    {% if actions %}
+    <ul>
+        {% for act in actions %}
+        <li>{{ act }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>(No action items found.)</p>
+    {% endif %}
+</div>
+
+<div class="dates">
+    <h3>Important Dates / Deadlines</h3>
+    {% if dates %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Context</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in dates %}
+            <tr>
+                <td>{{ d.date }}</td>
+                <td>{{ d.context }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>(No dates found.)</p>
+    {% endif %}
+</div>
+
+<br>
+<a href="{% url 'webapp:export_pdf' %}">Download as PDF</a>
+<br><br>
+<a href="{% url 'webapp:index' %}">&larr; Analyse another meeting</a>
+
+{% endblock %}

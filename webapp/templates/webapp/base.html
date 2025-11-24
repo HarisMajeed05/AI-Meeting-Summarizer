@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Meeting Summarizer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        textarea {
+            width: 100%;
+        }
+
+        .error {
+            color: red;
+        }
+
+        .actions,
+        .dates {
+            margin-top: 20px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 6px;
+        }
+
+        .recording-button {
+            margin-right: 10px;
+        }
+
+        .recording-status {
+            font-weight: bold;
+            color: #0066cc;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Meeting Summarizer</h1>
+        {% block content %}{% endblock %}
+    </div>
+</body>
+
+</html>

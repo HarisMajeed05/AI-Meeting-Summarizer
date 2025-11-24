@@ -1,0 +1,296 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Meeting Summarizer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        textarea {
+            width: 100%;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+        .section h2 {
+            margin-top: 0;
+        }
+
+        .actions-list li {
+            margin-bottom: 5px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        th {
+            background-color: #f4f4f4;
+        }
+
+        .errorlist {
+            color: red;
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1px solid #444;
+            background: #f4f4f4;
+        }
+
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+            border-color: #4CAF50;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Meeting Summarizer</h1>
+        <p>
+            Upload meeting <strong>text</strong>, an <strong>audio file</strong>, or use the
+            <strong>live recording</strong> buttons below. The system will:
+        <ul>
+            <li>Transcribe audio (ASR Service - Whisper)</li>
+            <li>Summarize text (Summarisation Service - BART)</li>
+            <li>Extract action items and important dates (Extraction Service)</li>
+        </ul>
+        </p>
+
+        <!-- 1) Django Form: Text / Audio Upload -->
+        <div class="section">
+            <h2>Upload Text or Audio</h2>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
+                <div>
+                    {{ form.text_input.label_tag }}<br>
+                    {{ form.text_input }}
+                    {% for e in form.text_input.errors %}
+                    <div class="errorlist">{{ e }}</div>
+                    {% endfor %}
+                </div>
+                <br>
+                <div>
+                    {{ form.audio_file.label_tag }}<br>
+                    {{ form.audio_file }}
+                    {% for e in form.audio_file.errors %}
+                    <div class="errorlist">{{ e }}</div>
+                    {% endfor %}
+                </div>
+                <br>
+                <button type="submit" class="btn btn-primary">Process</button>
+                {% if summary %}
+                <a href="{% url 'export_pdf' %}" class="btn">Export as PDF</a>
+                {% endif %}
+            </form>
+        </div>
+
+        <!-- 2) Live Audio Recording (Browser + Django endpoint) -->
+        <div class="section">
+            <h2>Live Audio Recording</h2>
+            <p>
+                Click <strong>Start Recording</strong> to record from your microphone, then
+                click <strong>Stop & Process</strong> to send the audio to the server.
+            </p>
+            <div>
+                <button id="startRecBtn" class="btn">Start Recording</button>
+                <button id="stopRecBtn" class="btn btn-primary" disabled>Stop &amp; Process</button>
+            </div>
+            <br>
+            <audio id="recordedAudio" controls style="display:none;"></audio>
+            <div id="recStatus"></div>
+        </div>
+
+        <!-- 3) Results Section -->
+        <div class="section">
+            <h2>Results</h2>
+
+            <h3>Transcript</h3>
+            <textarea id="transcriptArea" rows="6" readonly>{{ transcript }}</textarea>
+
+            <h3>Summary</h3>
+            <textarea id="summaryArea" rows="6" readonly>{{ summary }}</textarea>
+
+            <h3>Action Items</h3>
+            <ul id="actionsList" class="actions-list">
+                {% for a in actions %}
+                <li>{{ a }}</li>
+                {% empty %}
+                {% if summary %}
+                <li>(No action items found.)</li>
+                {% endif %}
+                {% endfor %}
+            </ul>
+
+            <h3>Important Dates</h3>
+            <table id="datesTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Context</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in dates %}
+                    <tr>
+                        <td>{{ d.date }}</td>
+                        <td>{{ d.context }}</td>
+                    </tr>
+                    {% empty %}
+                    {% if summary %}
+                    <tr>
+                        <td colspan="2">(No dates found.)</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // === Live audio recording logic ===
+        let mediaRecorder = null;
+        let recordedChunks = [];
+
+        const startBtn = document.getElementById("startRecBtn");
+        const stopBtn = document.getElementById("stopRecBtn");
+        const statusDiv = document.getElementById("recStatus");
+        const recordedAudio = document.getElementById("recordedAudio");
+
+        const transcriptArea = document.getElementById("transcriptArea");
+        const summaryArea = document.getElementById("summaryArea");
+        const actionsList = document.getElementById("actionsList");
+        const datesTable = document.getElementById("datesTable").getElementsByTagName("tbody")[0];
+
+        startBtn.addEventListener("click", async () => {
+            recordedChunks = [];
+            statusDiv.textContent = "Requesting microphone access...";
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: "audio/webm" });
+                    recordedAudio.src = URL.createObjectURL(blob);
+                    recordedAudio.style.display = "block";
+                    statusDiv.textContent = "Uploading and processing recording...";
+                    uploadRecording(blob);
+                };
+                mediaRecorder.start();
+                statusDiv.textContent = "Recording...";
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } catch (err) {
+                console.error(err);
+                statusDiv.textContent = "Microphone access denied or error occurred.";
+            }
+        });
+
+        stopBtn.addEventListener("click", () => {
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                stopBtn.disabled = true;
+                startBtn.disabled = false;
+                statusDiv.textContent = "Stopping recording...";
+            }
+        });
+
+        function uploadRecording(blob) {
+            const formData = new FormData();
+            formData.append("audio", blob, "recorded.webm");
+
+            fetch("{% url 'record_audio' %}", {
+                method: "POST",
+                body: formData
+            })
+                .then(resp => resp.json())
+                .then(data => {
+                    if (data.error) {
+                        statusDiv.textContent = "Error: " + data.error;
+                        return;
+                    }
+                    statusDiv.textContent = "Processing complete.";
+
+                    // Update UI with results from live recording
+                    transcriptArea.value = data.transcript || "";
+                    summaryArea.value = data.summary || "";
+
+                    // Actions
+                    actionsList.innerHTML = "";
+                    if (data.actions && data.actions.length > 0) {
+                        data.actions.forEach(a => {
+                            const li = document.createElement("li");
+                            li.textContent = a;
+                            actionsList.appendChild(li);
+                        });
+                    } else {
+                        const li = document.createElement("li");
+                        li.textContent = "(No action items found.)";
+                        actionsList.appendChild(li);
+                    }
+
+                    // Dates
+                    datesTable.innerHTML = "";
+                    if (data.dates && data.dates.length > 0) {
+                        data.dates.forEach(d => {
+                            const tr = document.createElement("tr");
+                            const tdDate = document.createElement("td");
+                            const tdCtx = document.createElement("td");
+                            tdDate.textContent = d.date;
+                            tdCtx.textContent = d.context;
+                            tr.appendChild(tdDate);
+                            tr.appendChild(tdCtx);
+                            datesTable.appendChild(tr);
+                        });
+                    } else {
+                        const tr = document.createElement("tr");
+                        const td = document.createElement("td");
+                        td.colSpan = 2;
+                        td.textContent = "(No dates found.)";
+                        tr.appendChild(td);
+                        datesTable.appendChild(tr);
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    statusDiv.textContent = "Error uploading recording.";
+                });
+        }
+    </script>
+</body>
+
+</html>
