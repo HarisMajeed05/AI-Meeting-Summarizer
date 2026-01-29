@@ -1,165 +1,248 @@
 {% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
     <meta charset="utf-8">
+
     <title>Meeting Summarizer</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- Wavesurfer.js -->
+    <script src="https://unpkg.com/wavesurfer.js"></script>
+
+    <!-- ===================== GLOBAL THEME STYLES ===================== -->
     <style>
         body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
+            background: var(--bg, #f8f9fa);
+            color: var(--text, #212529);
+            font-family: "Inter", Arial, sans-serif;
+            transition: background 0.3s, color 0.3s;
         }
 
-        .container {
-            max-width: 900px;
-            margin: auto;
+        .navbar {
+            border-radius: 10px;
+            margin-bottom: 20px;
         }
 
-        textarea {
-            width: 100%;
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+            transition: transform .2s, box-shadow .2s;
+            background: var(--card-bg, #ffffff);
+            color: var(--text);
         }
 
-        .section {
-            margin-bottom: 30px;
-            padding: 15px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.10);
         }
 
-        .section h2 {
-            margin-top: 0;
+        textarea,
+        input,
+        .form-control {
+            background: var(--input-bg, #ffffff) !important;
+            color: var(--text, #000000) !important;
+            border-radius: 10px !important;
+            border: 1px solid var(--input-border, #ced4da) !important;
         }
 
-        .actions-list li {
-            margin-bottom: 5px;
+        textarea::placeholder,
+        input::placeholder {
+            color: var(--placeholder, #6c757d);
         }
 
-        table {
-            border-collapse: collapse;
-            width: 100%;
+        /* Dark variables */
+        .dark {
+            --bg: #0f0f0f;
+            --text: #f8f9fa;
+            --card-bg: #1c1c1c;
+            --input-bg: #2b2b2b;
+            --input-border: #555;
+            --placeholder: #bdbdbd;
         }
 
-        th,
-        td {
-            border: 1px solid #ddd;
-            padding: 8px;
-        }
-
-        th {
-            background-color: #f4f4f4;
-        }
-
-        .errorlist {
-            color: red;
-            list-style: none;
-            padding-left: 0;
-        }
-
-        .btn {
-            padding: 6px 12px;
+        /* Drag & Drop Zone */
+        #dropZone {
+            border: 3px dashed var(--input-border, #ccc);
+            border-radius: 12px;
+            padding: 50px;
             cursor: pointer;
-            border-radius: 4px;
-            border: 1px solid #444;
-            background: #f4f4f4;
+            background: var(--card-bg);
+            color: var(--text);
+            transition: 0.3s;
         }
 
-        .btn-primary {
-            background: #4CAF50;
+        #dropZone.dragover {
+            border-color: #0d6efd;
+            background: rgba(13, 110, 253, 0.15);
+            color: #0d6efd;
+            transform: scale(1.02);
+            box-shadow: 0 0 10px rgba(13, 110, 253, 0.7);
+        }
+
+        /* Upload Progress */
+        #uploadProgressContainer {
+            display: none;
+        }
+
+        /* Loading Spinner Overlay */
+        #loadingOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
             color: white;
-            border-color: #4CAF50;
+            font-size: 25px;
+            font-weight: 600;
+        }
+
+        #pdfFloatingBtn {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            z-index: 999;
+            padding: 14px 22px;
+            border-radius: 50px;
+            font-size: 18px;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <h1>Meeting Summarizer</h1>
-        <p>
-            Upload meeting <strong>text</strong>, an <strong>audio file</strong>, or use the
-            <strong>live recording</strong> buttons below. The system will:
-        <ul>
-            <li>Transcribe audio (ASR Service - Whisper)</li>
-            <li>Summarize text (Summarisation Service - BART)</li>
-            <li>Extract action items and important dates (Extraction Service)</li>
-        </ul>
-        </p>
 
-        <!-- 1) Django Form: Text / Audio Upload -->
-        <div class="section">
-            <h2>Upload Text or Audio</h2>
-            <form method="post" enctype="multipart/form-data">
+    <!-- ===================== SPINNER OVERLAY ===================== -->
+    <div id="loadingOverlay">
+        <div class="spinner-border text-light" style="width: 4rem; height: 4rem;"></div>
+        <div class="ms-3">Processing...</div>
+    </div>
+
+    <div class="container py-4">
+
+        <!-- ===================== NAVBAR ===================== -->
+        <nav class="navbar navbar-expand-lg bg-body-tertiary shadow-sm px-3 rounded">
+            <span class="navbar-brand fw-bold"><i class="bi bi-soundwave"></i> Meeting Summarizer</span>
+
+            <div class="ms-auto d-flex gap-3">
+
+                <!-- Language Toggle -->
+                <button id="langToggle" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-translate"></i> زبان / EN
+                </button>
+
+                <!-- Dark Mode Toggle -->
+                <button id="darkToggle" class="btn btn-dark btn-sm">
+                    <i class="bi bi-moon"></i>
+                </button>
+
+            </div>
+        </nav>
+
+        <!-- ===================== PAGE HEADER ===================== -->
+        <div class="text-center mb-5">
+            <h2 id="headerTitle" class="fw-bold">AI-Powered Meeting Assistant</h2>
+            <p class="text-muted">Upload audio, enter text, or record live, Our system will transcribe, summarize &
+                extract key items.</p>
+        </div>
+
+        <!-- ===================== UPLOAD BOX ===================== -->
+        <div class="card p-4 mb-4">
+            <h4 id="uploadTitle"><i class="bi bi-upload"></i> Upload Text or Audio</h4>
+            <hr>
+
+            <form method="post" enctype="multipart/form-data" onsubmit="showLoading()">
                 {% csrf_token %}
-                {{ form.non_field_errors }}
-                <div>
-                    {{ form.text_input.label_tag }}<br>
-                    {{ form.text_input }}
-                    {% for e in form.text_input.errors %}
-                    <div class="errorlist">{{ e }}</div>
-                    {% endfor %}
+
+                <label class="form-label mt-2">Meeting Transcript (Text):</label>
+                {{ form.text_input }}
+
+                <!-- Hidden audio input -->
+                {{ form.audio_file }}
+
+                <!-- Drag-and-drop Zone -->
+                <div id="dropZone" class="text-center fw-semibold mt-3">
+                    <i class="bi bi-cloud-arrow-up fs-1"></i><br>
+                    <span id="dropText">Drag & Drop Audio File Here or Click to Browse</span>
                 </div>
-                <br>
-                <div>
-                    {{ form.audio_file.label_tag }}<br>
-                    {{ form.audio_file }}
-                    {% for e in form.audio_file.errors %}
-                    <div class="errorlist">{{ e }}</div>
-                    {% endfor %}
+
+                <!-- Upload Progress -->
+                <div id="uploadProgressContainer" class="mt-3">
+                    <label class="form-label">Uploading...</label>
+                    <div class="progress">
+                        <div id="uploadProgress" class="progress-bar progress-bar-striped progress-bar-animated"
+                            role="progressbar" style="width:0%"></div>
+                    </div>
                 </div>
-                <br>
-                <button type="submit" class="btn btn-primary">Process</button>
-                {% if summary %}
-                <a href="{% url 'export_pdf' %}" class="btn">Export as PDF</a>
-                {% endif %}
+
+                <div id="fileInfo" class="mt-2 text-info fw-semibold" style="display:none;"></div>
+
+                <!-- Process Button -->
+                <button id="processBtn" type="submit" class="btn btn-success mt-4">
+                    <i class="bi bi-check2-circle"></i> Process
+                </button>
             </form>
         </div>
 
-        <!-- 2) Live Audio Recording (Browser + Django endpoint) -->
-        <div class="section">
-            <h2>Live Audio Recording</h2>
-            <p>
-                Click <strong>Start Recording</strong> to record from your microphone, then
-                click <strong>Stop & Process</strong> to send the audio to the server.
-            </p>
-            <div>
-                <button id="startRecBtn" class="btn">Start Recording</button>
-                <button id="stopRecBtn" class="btn btn-primary" disabled>Stop &amp; Process</button>
+        <!-- ===================== LIVE RECORDING ===================== -->
+        <div class="card p-4 mb-4">
+            <h4 id="recordTitle"><i class="bi bi-mic"></i> Live Audio Recording</h4>
+            <hr>
+
+            <div class="d-flex gap-4">
+                <button id="startRecBtn" class="btn btn-dark">
+                    <i class="bi bi-record-circle"></i> Start
+                </button>
+                <button id="stopRecBtn" class="btn btn-danger" disabled>
+                    <i class="bi bi-stop-circle"></i> Stop & Process
+                </button>
             </div>
-            <br>
-            <audio id="recordedAudio" controls style="display:none;"></audio>
-            <div id="recStatus"></div>
+
+            <div id="recStatus" class="mt-2 text-primary fw-semibold"></div>
+
+            <div id="waveform" class="mt-3"></div>
+
+            <audio id="recordedAudio" controls class="w-100 mt-3 d-none"></audio>
         </div>
 
-        <!-- 3) Results Section -->
-        <div class="section">
-            <h2>Results</h2>
+        <!-- ===================== RESULTS ===================== -->
+        <div class="card p-4 mb-4">
+            <h4 id="resultsTitle"><i class="bi bi-clipboard-check"></i> Results</h4>
+            <hr>
 
-            <h3>Transcript</h3>
-            <textarea id="transcriptArea" rows="6" readonly>{{ transcript }}</textarea>
+            <h5 id="transcriptLabel">Transcript</h5>
+            <textarea id="transcriptArea" rows="5" class="mb-3" readonly>{{ transcript }}</textarea>
 
-            <h3>Summary</h3>
-            <textarea id="summaryArea" rows="6" readonly>{{ summary }}</textarea>
+            <h5 id="summaryLabel">Summary</h5>
+            <textarea id="summaryArea" rows="5" class="mb-3" readonly>{{ summary }}</textarea>
 
-            <h3>Action Items</h3>
-            <ul id="actionsList" class="actions-list">
+            <h5 id="actionLabel">Action Items</h5>
+            <ul id="actionsList" class="list-group mb-3">
                 {% for a in actions %}
-                <li>{{ a }}</li>
+                <li class="list-group-item"><i class="bi bi-check-circle text-success"></i> {{ a }}</li>
                 {% empty %}
                 {% if summary %}
-                <li>(No action items found.)</li>
+                <li class="list-group-item text-muted">(No action items found.)</li>
                 {% endif %}
                 {% endfor %}
             </ul>
 
-            <h3>Important Dates</h3>
-            <table id="datesTable">
+            <h5 id="datesLabel">Important Dates</h5>
+            <table class="table table-bordered">
                 <thead>
                     <tr>
                         <th>Date</th>
                         <th>Context</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="datesTable">
                     {% for d in dates %}
                     <tr>
                         <td>{{ d.date }}</td>
@@ -175,10 +258,148 @@
                 </tbody>
             </table>
         </div>
+
     </div>
 
+    <!-- ===================== FLOATING PDF BUTTON ===================== -->
+    {% if summary %}
+    <a href="{% url 'export_pdf' %}" class="btn btn-primary shadow-lg" id="pdfFloatingBtn">
+        <i class="bi bi-file-earmark-pdf"></i>
+    </a>
+    {% endif %}
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- ===================== APPLY BOOTSTRAP FORM CONTROL ===================== -->
     <script>
-        // === Live audio recording logic ===
+        document.querySelectorAll("textarea, input").forEach(el => {
+            el.classList.add("form-control");
+        });
+    </script>
+
+    <!-- ===================== DARK MODE TOGGLE ===================== -->
+    <script>
+        document.getElementById("darkToggle").onclick = () =>
+            document.body.classList.toggle("dark");
+    </script>
+
+    <!-- ===================== LANGUAGE TOGGLE (EN ↔ UR) ===================== -->
+    <script>
+        let currentLang = "en";
+        document.getElementById("langToggle").onclick = () => {
+            currentLang = currentLang === "en" ? "ur" : "en";
+
+            const t = {
+                en: {
+                    header: "AI-Powered Meeting Assistant",
+                    upload: "Upload Text or Audio",
+                    recording: "Live Audio Recording",
+                    results: "Results",
+                    transcript: "Transcript",
+                    summary: "Summary",
+                    action: "Action Items",
+                    dates: "Important Dates",
+                    process: "Process"
+                },
+                ur: {
+                    header: "اے آئی پر مبنی میٹنگ اسسٹنٹ",
+                    upload: "متن یا آڈیو اپ لوڈ کریں",
+                    recording: "لائیو آڈیو ریکارڈنگ",
+                    results: "نتائج",
+                    transcript: "ٹرانسکرپٹ",
+                    summary: "خلاصہ",
+                    action: "عملی نکات",
+                    dates: "اہم تاریخیں",
+                    process: "پروسیس کریں"
+                }
+            };
+
+            const L = t[currentLang];
+
+            document.getElementById("headerTitle").innerText = L.header;
+            document.getElementById("uploadTitle").innerText = L.upload;
+            document.getElementById("recordTitle").innerText = L.recording;
+            document.getElementById("resultsTitle").innerText = L.results;
+            document.getElementById("transcriptLabel").innerText = L.transcript;
+            document.getElementById("summaryLabel").innerText = L.summary;
+            document.getElementById("actionLabel").innerText = L.action;
+            document.getElementById("datesLabel").innerText = L.dates;
+            document.getElementById("processBtn").innerText = L.process;
+
+            document.getElementById("langToggle").innerHTML =
+                currentLang === "en"
+                    ? '<i class="bi bi-translate"></i> زبان / EN'
+                    : '<i class="bi bi-translate"></i> EN / اردو';
+        };
+    </script>
+
+    <!-- ===================== LOADING SPINNER ===================== -->
+    <script>
+        function showLoading() {
+            document.getElementById("loadingOverlay").style.display = "flex";
+        }
+    </script>
+
+    <!-- ===================== DRAG & DROP + PROGRESS UPLOAD ===================== -->
+    <script>
+        const fileInput = document.querySelector('input[name="audio_file"]');
+        const dropZone = document.getElementById("dropZone");
+        const fileInfo = document.getElementById("fileInfo");
+        const progressContainer = document.getElementById("uploadProgressContainer");
+        const progressBar = document.getElementById("uploadProgress");
+
+        dropZone.addEventListener("click", () => fileInput.click());
+
+        // Normal file selection
+        fileInput.addEventListener("change", () => {
+            if (fileInput.files.length > 0)
+                showSelected(fileInput.files[0]);
+        });
+
+        // Drag events
+        dropZone.addEventListener("dragenter", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+        dropZone.addEventListener("dragover", e => e.preventDefault());
+        dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+
+        dropZone.addEventListener("drop", e => {
+            e.preventDefault();
+            dropZone.classList.remove("dragover");
+
+            const file = e.dataTransfer.files[0];
+            if (!file) return;
+
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+
+            showSelected(file);
+        });
+
+        function showSelected(file) {
+            fileInfo.style.display = "block";
+            fileInfo.innerHTML = `
+        <i class="bi bi-music-note-beamed"></i>
+        Selected: <b>${file.name}</b>
+    `;
+            progressContainer.style.display = "block";
+            simulateUpload();
+        }
+
+        // Fake upload animation
+        function simulateUpload() {
+            let p = 0;
+            let interval = setInterval(() => {
+                p += Math.random() * 12;
+                if (p >= 100) { p = 100; clearInterval(interval); }
+                progressBar.style.width = p + "%";
+                progressBar.innerText = Math.floor(p) + "%";
+            }, 150);
+        }
+    </script>
+
+    <!-- ===================== LIVE RECORDING + WAVEFORM ===================== -->
+    <script>
         let mediaRecorder = null;
         let recordedChunks = [];
 
@@ -187,110 +408,86 @@
         const statusDiv = document.getElementById("recStatus");
         const recordedAudio = document.getElementById("recordedAudio");
 
-        const transcriptArea = document.getElementById("transcriptArea");
-        const summaryArea = document.getElementById("summaryArea");
-        const actionsList = document.getElementById("actionsList");
-        const datesTable = document.getElementById("datesTable").getElementsByTagName("tbody")[0];
+        let wavesurfer;
 
-        startBtn.addEventListener("click", async () => {
+        startBtn.onclick = async () => {
             recordedChunks = [];
-            statusDiv.textContent = "Requesting microphone access...";
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        recordedChunks.push(event.data);
-                    }
-                };
-                mediaRecorder.onstop = () => {
-                    const blob = new Blob(recordedChunks, { type: "audio/webm" });
-                    recordedAudio.src = URL.createObjectURL(blob);
-                    recordedAudio.style.display = "block";
-                    statusDiv.textContent = "Uploading and processing recording...";
-                    uploadRecording(blob);
-                };
-                mediaRecorder.start();
-                statusDiv.textContent = "Recording...";
-                startBtn.disabled = true;
-                stopBtn.disabled = false;
-            } catch (err) {
-                console.error(err);
-                statusDiv.textContent = "Microphone access denied or error occurred.";
+            statusDiv.textContent = "Accessing microphone...";
+
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+            mediaRecorder.onstop = sendRecording;
+
+            mediaRecorder.start();
+
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            statusDiv.textContent = "Recording...";
+
+            // Live waveform
+            wavesurfer = WaveSurfer.create({
+                container: "#waveform",
+                waveColor: "#999",
+                progressColor: "#0d6efd",
+                height: 80
+            });
+        };
+
+        stopBtn.onclick = () => {
+            mediaRecorder.stop();
+            stopBtn.disabled = true;
+            startBtn.disabled = false;
+            statusDiv.textContent = "Processing...";
+        };
+
+        function sendRecording() {
+                // Clear old content before sending new data
+                transcriptArea.value = "";   // Clear the transcript field
+                summaryArea.value = "";      // Clear the summary field
+                actionsList.innerHTML = "";  // Clear action items list
+                datesTable.innerHTML = "";   // Clear dates table
+
+                const blob = new Blob(recordedChunks, { type: "audio/webm" });
+                recordedAudio.src = URL.createObjectURL(blob);
+                recordedAudio.classList.remove("d-none");
+
+                showLoading();
+
+                const fd = new FormData();
+                fd.append("audio", blob, "recorded.webm");
+
+                fetch("{% url 'record_audio' %}", { method: "POST", body: fd })
+                    .then(r => r.json())
+                    .then(data => {
+                        document.getElementById("loadingOverlay").style.display = "none";
+
+                        if (data.error) {
+                            statusDiv.textContent = "Error: " + data.error;
+                            return;
+                        }
+
+                        statusDiv.textContent = "Done ✔";
+
+                        // Populate new content
+                        transcriptArea.value = data.transcript || ""; // Set new transcript or leave empty
+                        summaryArea.value = data.summary || "";       // Set new summary or leave empty
+
+                        // Actions - populate new action items
+                        (data.actions || []).forEach(a =>
+                            actionsList.innerHTML += `<li class='list-group-item'><i class="bi bi-check-circle text-success"></i> ${a}</li>`
+                        );
+
+                        // Important dates - populate new dates
+                        (data.dates || []).forEach(d =>
+                            datesTable.innerHTML += `<tr><td>${d.date}</td><td>${d.context}</td></tr>`
+                        );
+                    });
             }
-        });
 
-        stopBtn.addEventListener("click", () => {
-            if (mediaRecorder && mediaRecorder.state === "recording") {
-                mediaRecorder.stop();
-                stopBtn.disabled = true;
-                startBtn.disabled = false;
-                statusDiv.textContent = "Stopping recording...";
-            }
-        });
-
-        function uploadRecording(blob) {
-            const formData = new FormData();
-            formData.append("audio", blob, "recorded.webm");
-
-            fetch("{% url 'record_audio' %}", {
-                method: "POST",
-                body: formData
-            })
-                .then(resp => resp.json())
-                .then(data => {
-                    if (data.error) {
-                        statusDiv.textContent = "Error: " + data.error;
-                        return;
-                    }
-                    statusDiv.textContent = "Processing complete.";
-
-                    // Update UI with results from live recording
-                    transcriptArea.value = data.transcript || "";
-                    summaryArea.value = data.summary || "";
-
-                    // Actions
-                    actionsList.innerHTML = "";
-                    if (data.actions && data.actions.length > 0) {
-                        data.actions.forEach(a => {
-                            const li = document.createElement("li");
-                            li.textContent = a;
-                            actionsList.appendChild(li);
-                        });
-                    } else {
-                        const li = document.createElement("li");
-                        li.textContent = "(No action items found.)";
-                        actionsList.appendChild(li);
-                    }
-
-                    // Dates
-                    datesTable.innerHTML = "";
-                    if (data.dates && data.dates.length > 0) {
-                        data.dates.forEach(d => {
-                            const tr = document.createElement("tr");
-                            const tdDate = document.createElement("td");
-                            const tdCtx = document.createElement("td");
-                            tdDate.textContent = d.date;
-                            tdCtx.textContent = d.context;
-                            tr.appendChild(tdDate);
-                            tr.appendChild(tdCtx);
-                            datesTable.appendChild(tr);
-                        });
-                    } else {
-                        const tr = document.createElement("tr");
-                        const td = document.createElement("td");
-                        td.colSpan = 2;
-                        td.textContent = "(No dates found.)";
-                        tr.appendChild(td);
-                        datesTable.appendChild(tr);
-                    }
-                })
-                .catch(err => {
-                    console.error(err);
-                    statusDiv.textContent = "Error uploading recording.";
-                });
-        }
     </script>
+
 </body>
 
 </html>

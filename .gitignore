@@ -1,8 +1,7 @@
 # Virtual environments
 venv/
-venv38/
-env/
 .venv/
+env/
 
 # Python cache
 __pycache__/
@@ -14,3 +13,14 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Build files
+build/
+
+# Distribution files
+dist/
+*.egg-info/
+
+# FFmpeg binaries
+ffmpeg*
+ffmpeg/

@@ -41,6 +41,7 @@ class Chunker:
 class BartSummarizer(ISummarizer):
     def __init__(self, model: str = SUMMARIZER_MODEL_NAME):
         self.pipe = pipeline("summarization", model=model)
+        #self.pipe = pipeline("summarization", model=model)
         # Make tokenizer aware of sensible ceiling to avoid warnings
         self.pipe.tokenizer.model_max_length = TOKENIZER_MODEL_MAX_LENGTH
 
