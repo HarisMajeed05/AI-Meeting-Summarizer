@@ -24,3 +24,12 @@ dist/
 # FFmpeg binaries
 ffmpeg*
 ffmpeg/
+
+#extras
+*.pdf
+*.docx
+*.pptx
+*.wav
+*.mp3
+*.mp4
+*.webm
